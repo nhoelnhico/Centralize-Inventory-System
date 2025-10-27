@@ -1,62 +1,63 @@
-const express = require('express');
+// routes/transmittals.js
+const express = require("express");
 const router = express.Router();
-const pool = require('../db');
+const pool = require("../db");
 
-// Get all transmittals
-router.get('/', async (req, res) => {
+// GET all transmittals
+router.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM transmittals');
+    const [rows] = await pool.query("SELECT * FROM transmittals ORDER BY id DESC");
     res.json(rows);
   } catch (err) {
-    console.error('Error fetching transmittals:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("Error fetching transmittals:", err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-// Add new transmittal
-router.post('/', async (req, res) => {
+// POST new transmittal
+router.post("/", async (req, res) => {
   try {
-    const { employee_name, device_list, date_issued, status, signature } = req.body;
-
+    const { employee_name, device_list, transaction_type, date_issued, status, signature } = req.body;
     await pool.query(
-      'INSERT INTO transmittals (employee_name, device_list, date_issued, status, signature) VALUES (?, ?, ?, ?, ?)',
-      [employee_name, device_list, date_issued, status, signature]
+      `INSERT INTO transmittals 
+        (employee_name, device_list, transaction_type, date_issued, status, signature)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [employee_name, device_list, transaction_type, date_issued, status, signature]
     );
-
-    res.json({ message: 'Transmittal added successfully' });
+    res.json({ message: "Transmittal added successfully" });
   } catch (err) {
-    console.error('Error adding transmittal:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("Error adding transmittal:", err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-// Update transmittal
-router.put('/:id', async (req, res) => {
+// ✅ PUT (Update) transmittal
+router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { employee_name, device_list, date_issued, status, signature } = req.body;
-
+    const { employee_name, device_list, transaction_type, date_issued, status, signature } = req.body;
     await pool.query(
-      'UPDATE transmittals SET employee_name=?, device_list=?, date_issued=?, status=?, signature=? WHERE id=?',
-      [employee_name, device_list, date_issued, status, signature, id]
+      `UPDATE transmittals 
+       SET employee_name=?, device_list=?, transaction_type=?, date_issued=?, status=?, signature=? 
+       WHERE id=?`,
+      [employee_name, device_list, transaction_type, date_issued, status, signature, id]
     );
-
-    res.json({ message: 'Transmittal updated successfully' });
+    res.json({ message: "Transmittal updated successfully" });
   } catch (err) {
-    console.error('Error updating transmittal:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("Error updating transmittal:", err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-// Delete transmittal
-router.delete('/:id', async (req, res) => {
+// DELETE transmittal
+router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM transmittals WHERE id=?', [id]);
-    res.json({ message: 'Transmittal deleted successfully' });
+    await pool.query("DELETE FROM transmittals WHERE id=?", [id]);
+    res.json({ message: "Transmittal deleted successfully" });
   } catch (err) {
-    console.error('Error deleting transmittal:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("Error deleting transmittal:", err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
