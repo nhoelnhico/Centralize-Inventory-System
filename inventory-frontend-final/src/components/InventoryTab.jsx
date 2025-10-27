@@ -1,75 +1,196 @@
-import React from 'react';
-import api from '../api';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { Modal, Button, Table, Form } from "react-bootstrap";
 
-export default function InventoryTab(){
-  const [list,setList] = React.useState([]);
-  const [q,setQ] = React.useState('');
-  const [editing, setEditing] = React.useState(null);
-  const [form, setForm] = React.useState({device_type:'',brand:'',model:'',device_name:'',serial_number:'',fam_tag:'',remarks:'',status:''});
+export default function InventoryTab() {
+  const [items, setItems] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    item_name: "",
+    quantity: "",
+    category: "",
+    status: "in_stock",
+  });
 
-  const load = ()=> api.get('/devices',{params:{q}}).then(r=> setList(r.data)).catch(()=>{});
-  React.useEffect(()=> load(),[]);
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
-  const startEdit = (item)=>{
-    setEditing(item.id);
-    setForm({...item});
-    const modal = new window.bootstrap.Modal(document.getElementById('editModal'));
-    modal.show();
+  const fetchItems = async () => {
+    try {
+      const res = await axios.get("http://localhost:4000/api/inventory");
+      setItems(res.data);
+    } catch (err) {
+      console.error("Error fetching inventory:", err);
+    }
   };
 
-  const save = async ()=>{
-    try{
-      await api.put('/devices/'+editing, form);
+  const handleSave = async () => {
+    try {
+      if (!form.item_name || !form.quantity) {
+        alert("Item name and quantity are required.");
+        return;
+      }
+
+      if (editing) {
+        await axios.put(
+          `http://localhost:4000/api/inventory/${editing.id}`,
+          form
+        );
+      } else {
+        await axios.post("http://localhost:4000/api/inventory", form);
+      }
+
+      setShowModal(false);
       setEditing(null);
-      const modalEl = document.getElementById('editModal');
-      const modal = window.bootstrap.Modal.getInstance(modalEl);
-      modal.hide();
-      load();
-    }catch(e){ alert('Error'); }
+      setForm({ item_name: "", quantity: "", category: "", status: "in_stock" });
+      fetchItems();
+    } catch (err) {
+      console.error("Error saving item:", err);
+      alert("Failed to save item. Check console for details.");
+    }
   };
 
-  const del = async (id)=>{ if(!confirm('Delete device?')) return; await api.delete('/devices/'+id); load(); };
+  const handleEdit = (it) => {
+    setEditing(it);
+    setForm({
+      item_name: it.item_name,
+      quantity: it.quantity,
+      category: it.category,
+      status: it.status,
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
+    try {
+      await axios.delete(`http://localhost:4000/api/inventory/${id}`);
+      fetchItems();
+    } catch (err) {
+      console.error("Error deleting item:", err);
+    }
+  };
 
   return (
-    <div>
-      <div className="d-flex justify-content-between mb-2">
-        <input className="form-control w-50" placeholder="Search inventory..." value={q} onChange={e=>setQ(e.target.value)} />
-        <div>
-          <button className="btn btn-outline-secondary me-2" onClick={load}>Refresh</button>
-          <a className="btn btn-outline-success" href="http://localhost:4000/api/downloads/inventory/csv">Export CSV</a>
-        </div>
+    <div className="mt-3">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4>Inventory</h4>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditing(null);
+            setForm({ item_name: "", quantity: "", category: "", status: "in_stock" });
+            setShowModal(true);
+          }}
+        >
+          + Add Item
+        </Button>
       </div>
 
-      <div className="card">
-        <div className="card-body" style={{maxHeight:400, overflow:'auto'}}>
-          <table className="table">
-            <thead><tr><th>Type</th><th>Name</th><th>Serial</th><th>FAM</th><th>Assigned</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {list.map(l=> <tr key={l.id}><td>{l.device_type}</td><td>{l.device_name}</td><td>{l.serial_number}</td><td>{l.fam_tag}</td><td>{l.assigned_employee_name||''}</td><td>{l.status}</td><td><button className="btn btn-sm btn-outline-primary me-1" onClick={()=>startEdit(l)}>Edit</button><button className="btn btn-sm btn-outline-danger" onClick={()=>del(l.id)}>Delete</button></td></tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table striped bordered hover>
+        <thead className="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Item Name</th>
+            <th>Quantity</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th style={{ width: "140px" }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it.id}>
+              <td>{it.id}</td>
+              <td>{it.item_name}</td>
+              <td>{it.quantity}</td>
+              <td>{it.category}</td>
+              <td>{it.status}</td>
+              <td>
+                <Button
+                  variant="warning"
+                  size="sm"
+                  className="me-2"
+                  onClick={() => handleEdit(it)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDelete(it.id)}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
 
-      {/* Edit Modal */}
-      <div className="modal fade" id="editModal" tabIndex="-1" aria-hidden="true">
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header"><h5 className="modal-title">Edit Device</h5><button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-            <div className="modal-body">
-              <div className="mb-2"><select className="form-select" value={form.device_type} onChange={e=>setForm({...form,device_type:e.target.value})}><option value="">Type</option><option value="laptop">Laptop</option><option value="desktop">Desktop</option><option value="phone">Company Phone</option><option value="other">Other</option></select></div>
-              <div className="mb-2"><input className="form-control" placeholder="Brand" value={form.brand||''} onChange={e=>setForm({...form,brand:e.target.value})} /></div>
-              <div className="mb-2"><input className="form-control" placeholder="Model" value={form.model||''} onChange={e=>setForm({...form,model:e.target.value})} /></div>
-              <div className="mb-2"><input className="form-control" placeholder="Device Name" value={form.device_name||''} onChange={e=>setForm({...form,device_name:e.target.value})} /></div>
-              <div className="mb-2"><input className="form-control" placeholder="Serial Number" value={form.serial_number||''} onChange={e=>setForm({...form,serial_number:e.target.value})} /></div>
-              <div className="mb-2"><input className="form-control" placeholder="FAM Tag" value={form.fam_tag||''} onChange={e=>setForm({...form,fam_tag:e.target.value})} /></div>
-              <div className="mb-2"><input className="form-control" placeholder="Remarks" value={form.remarks||''} onChange={e=>setForm({...form,remarks:e.target.value})} /></div>
-              <div className="mb-2"><select className="form-select" value={form.status||''} onChange={e=>setForm({...form,status:e.target.value})}><option value="available">Available</option><option value="in_use">In Use</option><option value="returned">Returned</option><option value="disposed">Disposed</option></select></div>
-            </div>
-            <div className="modal-footer"><button className="btn btn-secondary" data-bs-dismiss="modal">Close</button><button className="btn btn-primary" onClick={save}>Save</button></div>
-          </div>
-        </div>
-      </div>
+      {/* Modal */}
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editing ? "Edit Item" : "Add Item"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-2">
+              <Form.Label>Item Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.item_name}
+                onChange={(e) =>
+                  setForm({ ...form, item_name: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Quantity</Form.Label>
+              <Form.Control
+                type="number"
+                value={form.quantity}
+                onChange={(e) =>
+                  setForm({ ...form, quantity: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Category</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.category}
+                onChange={(e) =>
+                  setForm({ ...form, category: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Status</Form.Label>
+              <Form.Select
+                value={form.status}
+                onChange={(e) =>
+                  setForm({ ...form, status: e.target.value })
+                }
+              >
+                <option value="in_stock">In Stock</option>
+                <option value="low_stock">Low Stock</option>
+                <option value="out_of_stock">Out of Stock</option>
+              </Form.Select>
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            {editing ? "Update" : "Save"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

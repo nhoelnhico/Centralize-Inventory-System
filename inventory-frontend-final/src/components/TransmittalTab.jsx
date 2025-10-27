@@ -1,78 +1,210 @@
-import React from 'react';
-import api from '../api';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { Modal, Button, Table, Form } from "react-bootstrap";
 
-export default function TransmittalTab(){
-  const [employees, setEmployees] = React.useState([]);
-  const [devices, setDevices] = React.useState([]);
-  const [list, setList] = React.useState([]);
-  const [form, setForm] = React.useState({employee_id:'',trans_type:'OUT',date_trans:'',remarks:'',signature:'', devices:[]});
-  const [q,setQ] = React.useState('');
+export default function TransmittalTab() {
+  const [trans, setTrans] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    employee_name: "",
+    device_list: "",
+    date_issued: "",
+    status: "",
+    signature: "",
+  });
 
-  React.useEffect(()=>{
-    api.get('/employees').then(r=> setEmployees(r.data)).catch(()=>{});
-    api.get('/devices',{params:{q:'',type:''}}).then(r=> setDevices(r.data)).catch(()=>{});
-    loadList();
-  },[]);
+  useEffect(() => {
+    fetchTrans();
+  }, []);
 
-  const loadList = ()=> api.get('/transmittals',{params:{q}}).then(r=> setList(r.data)).catch(()=>{});
-
-  const addDeviceRow = ()=> setForm({...form, devices: [...form.devices, {device_id:''} ]});
-
-  const submit = async ()=>{
-    try{
-      await api.post('/transmittals', form);
-      setForm({employee_id:'',trans_type:'OUT',date_trans:'',remarks:'',signature:'', devices:[]});
-      loadList();
-      api.get('/devices',{params:{q:'',type:''}}).then(r=> setDevices(r.data));
-      alert('Saved');
-    }catch(e){ alert('Error saving'); }
+  const fetchTrans = async () => {
+    try {
+      const res = await axios.get("http://localhost:4000/api/transmittals");
+      setTrans(res.data);
+    } catch (err) {
+      console.error("Error fetching transmittals:", err);
+    }
   };
 
-  const toggleDevice = (idx, val)=>{
-    const arr = [...form.devices];
-    arr[idx].device_id = val;
-    setForm({...form, devices:arr});
+  const handleSave = async () => {
+    try {
+      if (!form.employee_name || !form.device_list) {
+        alert("Employee and device list are required.");
+        return;
+      }
+
+      if (editing) {
+        await axios.put(
+          `http://localhost:4000/api/transmittals/${editing.id}`,
+          form
+        );
+      } else {
+        await axios.post("http://localhost:4000/api/transmittals", form);
+      }
+
+      setShowModal(false);
+      setEditing(null);
+      setForm({
+        employee_name: "",
+        device_list: "",
+        date_issued: "",
+        status: "",
+        signature: "",
+      });
+      fetchTrans();
+    } catch (err) {
+      console.error("Error saving transmittal:", err);
+      alert("Failed to save transmittal. Check console for details.");
+    }
+  };
+
+  const handleEdit = (t) => {
+    setEditing(t);
+    setForm(t);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this transmittal?")) return;
+    try {
+      await axios.delete(`http://localhost:4000/api/transmittals/${id}`);
+      fetchTrans();
+    } catch (err) {
+      console.error("Error deleting transmittal:", err);
+    }
   };
 
   return (
-    <div>
-      <div className="card mb-3">
-        <div className="card-header">New Transmittal</div>
-        <div className="card-body">
-          <div className="row g-2">
-            <div className="col-md-3"><select className="form-select" value={form.employee_id} onChange={e=>setForm({...form,employee_id:e.target.value})}><option value="">Select employee</option>{employees.map(emp=> <option key={emp.id} value={emp.id}>{emp.name} - {emp.employee_id}</option>)}</select></div>
-            <div className="col-md-2"><select className="form-select" value={form.trans_type} onChange={e=>setForm({...form,trans_type:e.target.value})}><option value="OUT">OUT</option><option value="IN">IN</option></select></div>
-            <div className="col-md-3"><input type="date" className="form-control" value={form.date_trans} onChange={e=>setForm({...form,date_trans:e.target.value})} /></div>
-            <div className="col-md-4"><input className="form-control" placeholder="Signature (text)" value={form.signature} onChange={e=>setForm({...form,signature:e.target.value})} /></div>
-          </div>
-          <div className="mt-2">
-            <label className="form-label">Devices</label>
-            {form.devices.map((d,idx)=> (
-              <div className="d-flex mb-2" key={idx}>
-                <select className="form-select me-2" value={d.device_id} onChange={e=>toggleDevice(idx,e.target.value)}>
-                  <option value="">Select device</option>
-                  {devices.filter(x=> x.status === 'available' || form.trans_type === 'IN').map(dev=> <option key={dev.id} value={dev.id}>{dev.device_name} - {dev.fam_tag} ({dev.status})</option>)}
-                </select>
-                <button className="btn btn-danger" onClick={()=>{ const arr=[...form.devices]; arr.splice(idx,1); setForm({...form,devices:arr}); }}>Remove</button>
-              </div>
-            ))}
-            <button className="btn btn-secondary" onClick={addDeviceRow}>Add device</button>
-          </div>
-          <div className="mt-2"><textarea className="form-control" placeholder="Remarks" value={form.remarks} onChange={e=>setForm({...form,remarks:e.target.value})}></textarea></div>
-          <div className="mt-2"><button className="btn btn-primary" onClick={submit}>Save Transmittal</button> <a className="btn btn-outline-success ms-2" href="http://localhost:4000/api/transmittals/export/csv">Export CSV</a></div>
-        </div>
+    <div className="mt-3">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4>Transmittals</h4>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditing(null);
+            setForm({
+              employee_name: "",
+              device_list: "",
+              date_issued: "",
+              status: "",
+              signature: "",
+            });
+            setShowModal(true);
+          }}
+        >
+          + Add Transmittal
+        </Button>
       </div>
 
-      <div className="card">
-        <div className="card-body" style={{maxHeight:300, overflow:'auto'}}>
-          <table className="table">
-            <thead><tr><th>No</th><th>Trans No</th><th>Employee</th><th>Type</th><th>Date</th><th>Devices</th></tr></thead>
-            <tbody>
-              {list.map(l=> <tr key={l.id}><td>{l.id}</td><td>{l.transmittal_no}</td><td>{l.employee_name}</td><td>{l.trans_type}</td><td>{new Date(l.date_trans||l.created_at).toLocaleDateString()}</td><td>{l.device_count}</td></tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table striped bordered hover>
+        <thead className="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Employee</th>
+            <th>Devices</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Signature</th>
+            <th style={{ width: "140px" }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trans.map((t) => (
+            <tr key={t.id}>
+              <td>{t.id}</td>
+              <td>{t.employee_name}</td>
+              <td>{t.device_list}</td>
+              <td>{t.date_issued}</td>
+              <td>{t.status}</td>
+              <td>{t.signature}</td>
+              <td>
+                <Button
+                  variant="warning"
+                  size="sm"
+                  className="me-2"
+                  onClick={() => handleEdit(t)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDelete(t.id)}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      {/* Modal */}
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editing ? "Edit Transmittal" : "Add Transmittal"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-2">
+              <Form.Label>Employee Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.employee_name}
+                onChange={(e) =>
+                  setForm({ ...form, employee_name: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Devices</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="List of device names or IDs"
+                value={form.device_list}
+                onChange={(e) =>
+                  setForm({ ...form, device_list: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Date Issued</Form.Label>
+              <Form.Control
+                type="date"
+                value={form.date_issued}
+                onChange={(e) =>
+                  setForm({ ...form, date_issued: e.target.value })
+                }
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Status</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Signature (text)</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.signature}
+                onChange={(e) => setForm({ ...form, signature: e.target.value })}
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            {editing ? "Update" : "Save"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
