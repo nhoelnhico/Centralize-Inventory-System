@@ -1,78 +1,112 @@
 import React, { useState, useEffect } from "react";
 import api from "../api";
+import { Modal, Button, Table, Form } from "react-bootstrap";
 
-export default function DevicesTab({ search }) {
-  const [type, setType] = useState("laptop");
-  const [form, setForm] = useState({ device_type: "laptop", brand: "", model: "", device_name: "", serial_number: "", fam_tag: "", remarks: "" });
-  const [list, setList] = useState([]);
+export default function EmployeesTab({ search }) {
+  const [employees, setEmployees] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    employee_id: "",
+    name: "",
+    email: "",
+    department: "",
+    position: "",
+  });
 
-  const load = async () => {
-    const res = await api.get("/devices", { params: { type } });
-    setList(res.data);
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get("/employees");
+      setEmployees(res.data);
+    } catch (err) {
+      console.error("Error fetching employees:", err);
+    }
   };
-  useEffect(() => { load(); }, [type]);
 
-  const submit = async () => {
-    await api.post("/devices", form);
-    setForm({ ...form, brand: "", model: "", device_name: "", serial_number: "", fam_tag: "", remarks: "" });
-    load();
+  const handleSave = async () => {
+    if (!form.name || !form.employee_id) return alert("Missing fields");
+    try {
+      if (editing) await api.put(`/employees/${editing.id}`, form);
+      else await api.post("/employees", form);
+      setShowModal(false);
+      setEditing(null);
+      setForm({ employee_id: "", name: "", email: "", department: "", position: "" });
+      fetchEmployees();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const del = async (id) => {
-    if (!window.confirm("Delete device?")) return;
-    await api.delete(`/devices/${id}`);
-    load();
+  const handleEdit = (emp) => {
+    setEditing(emp);
+    setForm(emp);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete employee?")) return;
+    await api.delete(`/employees/${id}`);
+    fetchEmployees();
   };
 
   return (
-    <div>
-      <div className="card mb-3">
-        <div className="card-header">Add Device</div>
-        <div className="card-body">
-          <div className="d-flex flex-wrap gap-2 mb-2">
-            <select className="form-select w-auto" value={type} onChange={(e) => { setType(e.target.value); setForm({ ...form, device_type: e.target.value }); }}>
-              <option value="laptop">Laptop</option>
-              <option value="desktop">Desktop</option>
-              <option value="phone">Company Phone</option>
-              <option value="other">Other</option>
-            </select>
-            {["brand", "model", "device_name"].map((f) => (
-              <input key={f} className="form-control" placeholder={f} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-            ))}
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            {["serial_number", "fam_tag", "remarks"].map((f) => (
-              <input key={f} className="form-control" placeholder={f.replace("_", " ")} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-            ))}
-            <button className="btn btn-primary" onClick={submit}>Add</button>
-          </div>
-        </div>
+    <div className="mt-3">
+      <div className="d-flex justify-content-between mb-3">
+        <h4>Employees</h4>
+        <Button onClick={() => { setEditing(null); setForm({ employee_id: "", name: "", email: "", department: "", position: "" }); setShowModal(true); }}>
+          + Add Employee
+        </Button>
       </div>
 
-      <div className="card">
-        <div className="card-body">
-          <table className="table table-bordered">
-            <thead>
-              <tr><th>Type</th><th>Name</th><th>Brand</th><th>Serial</th><th>FAM</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              {list
-                .filter((l) => Object.values(l).join(" ").toLowerCase().includes(search.toLowerCase()))
-                .map((l) => (
-                  <tr key={l.id}>
-                    <td>{l.device_type}</td>
-                    <td>{l.device_name}</td>
-                    <td>{l.brand}</td>
-                    <td>{l.serial_number}</td>
-                    <td>{l.fam_tag}</td>
-                    <td>{l.status}</td>
-                    <td><button className="btn btn-sm btn-outline-danger" onClick={() => del(l.id)}>Delete</button></td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Table striped bordered hover>
+        <thead>
+          <tr>
+            <th>ID</th><th>Emp ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Position</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {employees
+            .filter((emp) =>
+              Object.values(emp).join(" ").toLowerCase().includes(search.toLowerCase())
+            )
+            .map((emp) => (
+              <tr key={emp.id}>
+                <td>{emp.id}</td>
+                <td>{emp.employee_id}</td>
+                <td>{emp.name}</td>
+                <td>{emp.email}</td>
+                <td>{emp.department}</td>
+                <td>{emp.position}</td>
+                <td>
+                  <Button size="sm" variant="warning" className="me-2" onClick={() => handleEdit(emp)}>Edit</Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(emp.id)}>Delete</Button>
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </Table>
+
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editing ? "Edit Employee" : "Add Employee"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {["employee_id", "name", "email", "department", "position"].map((f) => (
+            <Form.Group key={f} className="mb-2">
+              <Form.Label>{f.replace("_", " ").toUpperCase()}</Form.Label>
+              <Form.Control value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+            </Form.Group>
+          ))}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}>{editing ? "Update" : "Save"}</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
